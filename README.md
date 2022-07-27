@@ -12,7 +12,8 @@ https://github.com/dogsheep/github-to-sqlite/.
 - [How to install](#how-to-install)
 - [Authentication](#authentication)
 - [Using custom gitlab instance](#using-custom-gitlab-instance)
-- [Fetching issues for a repository](#fetching-issues-for-a-repository)
+- [Fetching projects](#fetching-projects)
+- [Fetching pipelines](#fetching-pipelines)
 
 ## How to install
 
