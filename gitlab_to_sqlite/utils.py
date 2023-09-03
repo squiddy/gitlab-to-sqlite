@@ -554,7 +554,7 @@ def get_latest_merge_request_time(db: Database, project: str) -> str | None:
 
 
 def paginate(
-    client: Client, query: DocumentNode, node: str, get: lambda r: r["project"], **args
+    client: Client, query: DocumentNode, node: str, get=lambda r: r["project"], **args
 ):
     has_next_page = True
     after_cursor = None
