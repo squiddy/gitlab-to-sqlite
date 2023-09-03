@@ -365,7 +365,7 @@ def save_merge_request(db: Database, merge_request: dict) -> None:
 
 
 def get_latest_merge_request_time(db: Database, project: str) -> str | None:
-    project = db["projects"].rows_where(full_path=project)[0]
+    project = next(db["projects"].rows_where("full_path = ?", [project]))
 
     if db["merge_requests"].exists():
         result = db.query(
@@ -373,7 +373,7 @@ def get_latest_merge_request_time(db: Database, project: str) -> str | None:
             SELECT MAX(created_at) AS created, MAX(updated_at) AS updated
             FROM merge_requests 
             WHERE target_project_id = ?""",
-            [project.id],
+            [project["id"]],
         )
         row = next(result)
         if row["created"] and row["updated"]:
