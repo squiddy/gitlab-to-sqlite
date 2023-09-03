@@ -70,6 +70,42 @@ def projects(db_path, project, auth):
     utils.save_project(db, project)
 
 
+@cli.command(name="merge-requests")
+@click.argument(
+    "db_path",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    required=True,
+)
+@click.argument("project", required=True)
+@click.option(
+    "-a",
+    "--auth",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=True),
+    default="auth.json",
+    help="Path to auth.json token file",
+)
+@click.option(
+    "--full",
+    is_flag=True,
+)
+def merge_requests(db_path, project, auth, full):
+    "Save merge requests"
+    db = sqlite_utils.Database(db_path)
+    token, host = load_config(auth)
+
+    new = 0
+    for merge_request in utils.fetch_merge_requests(
+        project,
+        token,
+        host,
+        None if full else utils.get_latest_merge_request_time(db, project),
+    ):
+        utils.save_merge_request(db, merge_request)
+        new += 1
+
+    click.echo(f"Saved/updated {new} merge requests")
+
+
 @cli.command(name="pipelines")
 @click.argument(
     "db_path",
@@ -84,15 +120,23 @@ def projects(db_path, project, auth):
     default="auth.json",
     help="Path to auth.json token file",
 )
-def pipelines(db_path, project, auth):
+@click.option(
+    "--full",
+    is_flag=True,
+)
+def pipelines(db_path, project, auth, full):
     "Save pipelines"
     db = sqlite_utils.Database(db_path)
     token, host = load_config(auth)
-    latest = utils.get_latest_pipeline_time(db, project)
 
     new = 0
-    for pipeline in utils.fetch_pipelines(project, token, host, latest):
-        utils.save_pipeline(db, pipeline)
+    for pipeline in utils.fetch_pipelines(
+        project,
+        token,
+        host,
+        None if full else utils.get_latest_pipeline_time(db, project),
+    ):
+        utils.save_pipeline(db, pipeline, host)
         new += 1
 
     click.echo(f"Saved/updated {new} pipelines")
