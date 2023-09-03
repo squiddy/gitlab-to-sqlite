@@ -142,6 +142,68 @@ def pipelines(db_path, project, auth, full):
     click.echo(f"Saved/updated {new} pipelines")
 
 
+@cli.command(name="environments")
+@click.argument(
+    "db_path",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    required=True,
+)
+@click.argument("project", required=True)
+@click.option(
+    "-a",
+    "--auth",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=True),
+    default="auth.json",
+    help="Path to auth.json token file",
+)
+def environments(db_path, project, auth):
+    db = sqlite_utils.Database(db_path)
+    token, host = load_config(auth)
+
+    new = 0
+    for environment in utils.fetch_environments(
+        project,
+        token,
+        host,
+    ):
+        utils.save_environment(db, environment)
+        new += 1
+
+    click.echo(f"Saved/updated {new} environments")
+
+
+@cli.command(name="deployments")
+@click.argument(
+    "db_path",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    required=True,
+)
+@click.argument("project", required=True)
+@click.argument("environment", required=True)
+@click.option(
+    "-a",
+    "--auth",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=True),
+    default="auth.json",
+    help="Path to auth.json token file",
+)
+def deployments(db_path, project, environment, auth):
+    db = sqlite_utils.Database(db_path)
+    token, host = load_config(auth)
+
+    new = 0
+    for deployment in utils.fetch_deployments(
+        project,
+        environment,
+        token,
+        host,
+    ):
+        utils.save_deployment(db, deployment)
+        new += 1
+
+    click.echo(f"Saved/updated {new} deployments")
+
+
 def load_config(auth):
     try:
         data = json.load(open(auth))

@@ -179,7 +179,7 @@ def save_pipeline(db: Database, pipeline: dict, host: str) -> None:
             "status": job["status"],
             "queued_duration": job["queuedDuration"],
             "duration": job["duration"],
-            "web_url": f"https://{host}{job['webPath']}"
+            "web_url": f"https://{host}{job['webPath']}",
         }
         db["jobs"].insert(
             job_data,
@@ -229,6 +229,189 @@ def get_latest_pipeline_time(db: Database, project: str) -> str | None:
             return max(row["created"], row["updated"])
 
     return None
+
+
+environments_query = gql(
+    """
+query environments ($project: ID!) {
+  project(fullPath: $project) {
+    id
+
+    environments {
+      nodes {
+        id
+        name
+        path
+
+        createdAt
+        updatedAt
+
+        environmentType
+        externalUrl
+        tier
+      }
+    }
+  }
+}
+  """
+)
+
+
+def fetch_environments(project: str, token: str, host: str) -> list[dict]:
+    client = get_client(host, token)
+    result = client.execute(environments_query, variable_values={"project": project})
+    for environment in result["project"]["environments"]["nodes"]:
+        environment["project_id"] = result["project"]["id"].split("/")[-1]
+        environment["web_url"] = f"https://{host}{environment['path']}"
+        del environment["path"]
+        yield environment
+
+
+def save_environment(db: Database, environment: dict) -> None:
+    if "projects" not in db.table_names():
+        db["projects"].create({"id": int}, pk="id")
+
+    db["projects"].upsert({"id": environment["project_id"]}, pk="id")
+
+    data = {
+        "id": environment["id"].split("/")[-1],
+        "name": environment["name"],
+        "created_at": environment["createdAt"],
+        "updated_at": environment["updatedAt"],
+        "type": environment["environmentType"],
+        "external_url": environment["externalUrl"],
+        "tier": environment["tier"],
+        "project_id": environment["project_id"],
+        "web_url": environment["web_url"],
+    }
+
+    db["environments"].insert(
+        data,
+        pk="id",
+        alter=True,
+        replace=True,
+        columns={
+            "id": int,
+            "name": str,
+            "created_at": str,
+            "updated_at": str,
+            "type": str,
+            "external_url": str,
+            "tier": str,
+            "project_id": int,
+            "web_url": str,
+        },
+        foreign_keys=[("project_id", "projects", "id")],
+    )
+
+
+deployments_query = gql(
+    """
+query deployments ($project: ID!, $after: String, $name: String) {
+  project(fullPath: $project) {
+    environment(name: $name) {
+      deployments(first: 100, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          job {
+            id
+          }
+          createdAt
+          updatedAt
+          finishedAt
+          status
+          ref
+          commit {
+            sha
+          }
+        }
+      }
+    }
+  }
+}
+  """
+)
+
+
+def fetch_deployments(project: str, name: str, token: str, host: str) -> list[dict]:
+    client = get_client(host, token)
+    query = gql(
+        """
+    query deployments ($project: ID!, $name: String) {
+      project(fullPath: $project) {
+        id
+        environment(name: $name) {
+          id
+        }
+      }
+    }
+      """
+    )
+    result = client.execute(query, variable_values={"project": project, "name": name})
+
+    for deployment in paginate(
+        client,
+        deployments_query,
+        "deployments",
+        get=lambda r: r["project"]["environment"],
+        project=project,
+    ):
+        deployment["project_id"] = result["project"]["id"]
+        deployment["environment_id"] = result["project"]["environment"]["id"]
+        yield deployment
+
+
+def save_deployment(db: Database, deployment: dict) -> None:
+    if "projects" not in db.table_names():
+        db["projects"].create({"id": int}, pk="id")
+    if "environments" not in db.table_names():
+        db["environments"].create({"id": int}, pk="id")
+
+    project_id = deployment["project_id"].split("/")[-1]
+    environment_id = deployment["environment_id"].split("/")[-1]
+    db["projects"].upsert({"id": project_id}, pk="id")
+    db["environments"].upsert({"id": environment_id}, pk="id")
+
+    data = {
+        "id": deployment["id"].split("/")[-1],
+        "created_at": deployment["createdAt"],
+        "updated_at": deployment["updatedAt"],
+        "finished_at": deployment["finishedAt"],
+        "status": deployment["status"],
+        "ref": deployment["ref"],
+        "commit_sha": deployment["commit"]["sha"],
+        "job_id": deployment["job"]["id"].split("/")[-1],
+        "project_id": project_id,
+        "environment_id": environment_id,
+    }
+
+    db["deployments"].insert(
+        data,
+        pk="id",
+        alter=True,
+        replace=True,
+        columns={
+            "id": int,
+            "created_at": str,
+            "updated_at": str,
+            "finished_at": str,
+            "status": str,
+            "ref": str,
+            "commit_sha": str,
+            "job_id": int,
+            "project_id": int,
+            "environment_id": int,
+        },
+        foreign_keys=[
+            ("project_id", "projects", "id"),
+            ("environment_id", "environments", "id"),
+            ("job_id", "jobs", "id"),
+        ],
+    )
 
 
 merge_requests_query = gql(
@@ -299,11 +482,9 @@ def save_merge_request(db: Database, merge_request: dict) -> None:
         "web_url": merge_request["webUrl"],
         "target_branch": merge_request["targetBranch"],
         "target_project_id": merge_request["targetProjectId"],
-
         "created_at": merge_request["createdAt"],
         "merged_at": merge_request["mergedAt"],
         "updated_at": merge_request["updatedAt"],
-
         "commit_count": merge_request["commitCount"],
         "user_discussions_count": merge_request["userDiscussionsCount"],
         "user_notes_count": merge_request["userNotesCount"],
@@ -311,23 +492,17 @@ def save_merge_request(db: Database, merge_request: dict) -> None:
         "diff_stats_changes": merge_request["diffStatsSummary"]["changes"],
         "diff_stats_deletions": merge_request["diffStatsSummary"]["deletions"],
         "diff_stats_file_count": merge_request["diffStatsSummary"]["fileCount"],
-
         "state": merge_request["state"],
         "title": merge_request["title"],
         "description": merge_request["description"],
-
         "head_pipeline_id": merge_request["headPipeline"]["id"].split("/")[-1]
         if merge_request["headPipeline"]
         else None,
     }
 
-    db["pipelines"].upsert(
-      {"id": data["head_pipeline_id"]}, pk="id"
-    )
+    db["pipelines"].upsert({"id": data["head_pipeline_id"]}, pk="id")
 
-    db["projects"].upsert(
-      {"id": data["target_project_id"]}, pk="id"
-    )
+    db["projects"].upsert({"id": data["target_project_id"]}, pk="id")
 
     db["merge_requests"].upsert(
         data,
@@ -338,11 +513,9 @@ def save_merge_request(db: Database, merge_request: dict) -> None:
             "web_url": str,
             "target_branch": str,
             "target_project_id": int,
-
             "created_at": datetime.datetime,
             "merged_at": datetime.datetime,
             "updated_at": datetime.datetime,
-
             "commit_count": int,
             "user_discussions_count": int,
             "user_notes_count": int,
@@ -350,11 +523,9 @@ def save_merge_request(db: Database, merge_request: dict) -> None:
             "diff_stats_changes": int,
             "diff_stats_deletions": int,
             "diff_stats_file_count": int,
-
             "state": str,
             "title": str,
             "description": str,
-
             "head_pipeline_id": str,
         },
         foreign_keys=[
@@ -382,14 +553,18 @@ def get_latest_merge_request_time(db: Database, project: str) -> str | None:
     return None
 
 
-def paginate(client: Client, query: DocumentNode, node: str, **args):
+def paginate(
+    client: Client, query: DocumentNode, node: str, get: lambda r: r["project"], **args
+):
     has_next_page = True
     after_cursor = None
     while has_next_page:
         attempt = 0
         while True:
             try:
-                result = client.execute(query, variable_values={**args, "after": after_cursor})
+                result = client.execute(
+                    query, variable_values={**args, "after": after_cursor}
+                )
                 break
             except Exception as e:
                 attempt += 1
@@ -397,7 +572,7 @@ def paginate(client: Client, query: DocumentNode, node: str, **args):
                     raise
                 continue
 
-        yield from result["project"][node]["nodes"]
+        yield from get(result)[node]["nodes"]
 
-        has_next_page = result["project"][node]["pageInfo"]["hasNextPage"]
-        after_cursor = result["project"][node]["pageInfo"]["endCursor"]
+        has_next_page = get(result)[node]["pageInfo"]["hasNextPage"]
+        after_cursor = get(result)[node]["pageInfo"]["endCursor"]
