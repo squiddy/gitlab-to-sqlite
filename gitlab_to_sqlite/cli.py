@@ -191,15 +191,39 @@ def deployments(db_path, project, environment, auth):
     db = sqlite_utils.Database(db_path)
     token, host = load_config(auth)
 
+    if (
+        "deployments" in db.table_names()
+        and "projects" in db.table_names()
+        and "environments" in db.table_names()
+    ):
+        r = db.query(
+            """
+        SELECT
+            max(d.updated_at) AS last_update
+        FROM
+            deployments d
+            JOIN projects p ON d.project_id = p.id
+            JOIN environments e ON d.environment_id = e.id
+        WHERE
+            p.full_path = ?
+            AND e.name = ?
+        """,
+            [project, environment],
+        )
+        last_update = next(r)["last_update"]
+    else:
+        last_update = None
+
     new = 0
     for deployment in utils.fetch_deployments(
         project,
         environment,
         token,
         host,
+        last_update,
     ):
-        utils.save_deployment(db, deployment)
-        new += 1
+        if utils.save_deployment(db, deployment) is not False:
+            new += 1
 
     click.echo(f"Saved/updated {new} deployments")
 

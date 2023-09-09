@@ -24,7 +24,7 @@ setup(
         [console_scripts]
         gitlab-to-sqlite=gitlab_to_sqlite.cli:cli
     """,
-    install_requires=["sqlite-utils>=2.7.2", "gql[all]"],
+    install_requires=["sqlite-utils>=2.7.2", "gql[all]", "python-gitlab"],
     extras_require={"test": ["pytest", "black"]},
     tests_require=["gitlab-to-sqlite[test]"],
 )

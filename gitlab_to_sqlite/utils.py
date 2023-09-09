@@ -1,4 +1,5 @@
 import datetime
+import gitlab
 from graphql import DocumentNode
 from gql import gql, Client
 from gql.transport.aiohttp import AIOHTTPTransport
@@ -305,86 +306,48 @@ def save_environment(db: Database, environment: dict) -> None:
     )
 
 
-deployments_query = gql(
-    """
-query deployments ($project: ID!, $after: String, $name: String) {
-  project(fullPath: $project) {
-    environment(name: $name) {
-      deployments(first: 100, after: $after) {
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-        nodes {
-          id
-          job {
-            id
-          }
-          createdAt
-          updatedAt
-          finishedAt
-          status
-          ref
-          commit {
-            sha
-          }
-        }
-      }
-    }
-  }
-}
-  """
-)
+def fetch_deployments(
+    project: str, name: str, token: str, host: str, last_updated: str | None
+) -> list[dict]:
+    gl = gitlab.Gitlab(url=f"https://{host}", private_token=token)
 
-
-def fetch_deployments(project: str, name: str, token: str, host: str) -> list[dict]:
-    client = get_client(host, token)
-    query = gql(
-        """
-    query deployments ($project: ID!, $name: String) {
-      project(fullPath: $project) {
-        id
-        environment(name: $name) {
-          id
-        }
-      }
-    }
-      """
-    )
-    result = client.execute(query, variable_values={"project": project, "name": name})
-
-    for deployment in paginate(
-        client,
-        deployments_query,
-        "deployments",
-        get=lambda r: r["project"]["environment"],
-        project=project,
+    project = gl.projects.get(id=project, lazy=True)
+    for deployment in project.deployments.list(
+        environment=name,
+        get_all=True,
+        iterator=True,
+        order_by="updated_at",
+        updated_after=last_updated,
     ):
-        deployment["project_id"] = result["project"]["id"]
-        deployment["environment_id"] = result["project"]["environment"]["id"]
-        yield deployment
+        yield deployment.asdict()
 
 
-def save_deployment(db: Database, deployment: dict) -> None:
+def save_deployment(db: Database, deployment) -> None:
     if "projects" not in db.table_names():
         db["projects"].create({"id": int}, pk="id")
     if "environments" not in db.table_names():
         db["environments"].create({"id": int}, pk="id")
+    if "jobs" not in db.table_names():
+        db["jobs"].create({"id": int}, pk="id")
 
-    project_id = deployment["project_id"].split("/")[-1]
-    environment_id = deployment["environment_id"].split("/")[-1]
+    if not deployment["deployable"]:
+        return False
+
+    project_id = deployment["deployable"]["pipeline"]["project_id"]
+    environment_id = deployment["environment"]["id"]
+
     db["projects"].upsert({"id": project_id}, pk="id")
     db["environments"].upsert({"id": environment_id}, pk="id")
+    db["jobs"].upsert({"id": deployment["deployable"]["id"]}, pk="id")
 
     data = {
-        "id": deployment["id"].split("/")[-1],
-        "created_at": deployment["createdAt"],
-        "updated_at": deployment["updatedAt"],
-        "finished_at": deployment["finishedAt"],
+        "id": deployment["id"],
+        "created_at": deployment["created_at"],
+        "updated_at": deployment["updated_at"],
         "status": deployment["status"],
         "ref": deployment["ref"],
-        "commit_sha": deployment["commit"]["sha"],
-        "job_id": deployment["job"]["id"].split("/")[-1],
+        "commit_sha": deployment["sha"],
+        "job_id": deployment["deployable"]["id"],
         "project_id": project_id,
         "environment_id": environment_id,
     }
@@ -398,7 +361,6 @@ def save_deployment(db: Database, deployment: dict) -> None:
             "id": int,
             "created_at": str,
             "updated_at": str,
-            "finished_at": str,
             "status": str,
             "ref": str,
             "commit_sha": str,
@@ -542,7 +504,7 @@ def get_latest_merge_request_time(db: Database, project: str) -> str | None:
         result = db.query(
             """
             SELECT MAX(created_at) AS created, MAX(updated_at) AS updated
-            FROM merge_requests 
+            FROM merge_requests
             WHERE target_project_id = ?""",
             [project["id"]],
         )
