@@ -538,3 +538,7 @@ def paginate(
 
         has_next_page = get(result)[node]["pageInfo"]["hasNextPage"]
         after_cursor = get(result)[node]["pageInfo"]["endCursor"]
+
+
+def ensure_db_shape(db: Database):
+    db.index_foreign_keys()

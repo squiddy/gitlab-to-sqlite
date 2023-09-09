@@ -68,6 +68,7 @@ def projects(db_path, project, auth):
     token, host = load_config(auth)
     project = utils.fetch_project(project, token, host)
     utils.save_project(db, project)
+    utils.ensure_db_shape(db)
 
 
 @cli.command(name="merge-requests")
@@ -103,6 +104,7 @@ def merge_requests(db_path, project, auth, full):
         utils.save_merge_request(db, merge_request)
         new += 1
 
+    utils.ensure_db_shape(db)
     click.echo(f"Saved/updated {new} merge requests")
 
 
@@ -139,6 +141,7 @@ def pipelines(db_path, project, auth, full):
         utils.save_pipeline(db, pipeline, host)
         new += 1
 
+    utils.ensure_db_shape(db)
     click.echo(f"Saved/updated {new} pipelines")
 
 
@@ -169,6 +172,7 @@ def environments(db_path, project, auth):
         utils.save_environment(db, environment)
         new += 1
 
+    utils.ensure_db_shape(db)
     click.echo(f"Saved/updated {new} environments")
 
 
@@ -225,6 +229,7 @@ def deployments(db_path, project, environment, auth):
         if utils.save_deployment(db, deployment) is not False:
             new += 1
 
+    utils.ensure_db_shape(db)
     click.echo(f"Saved/updated {new} deployments")
 
 
