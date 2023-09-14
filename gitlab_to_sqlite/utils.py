@@ -161,7 +161,10 @@ def save_pipeline(db: Database, pipeline: dict, host: str) -> None:
             "commit_sha": str,
             "ref": str,
         },
-        foreign_keys=[("project_id", "projects", "id")],
+        foreign_keys=[
+            ("project_id", "projects", "id"),
+            ("commit_sha", "commits", "id"),
+        ],
     )
 
     for job in pipeline["jobs"]["nodes"]:
@@ -306,6 +309,48 @@ def save_environment(db: Database, environment: dict) -> None:
     )
 
 
+def fetch_commits(project: str, token: str, host: str) -> list[dict]:
+    gl = gitlab.Gitlab(url=f"https://{host}", private_token=token)
+
+    project = gl.projects.get(id=project)
+    return project.commits.list(iterator=True, with_stats=True)
+
+
+def save_commit(db: Database, commit) -> None:
+    data = {
+        "id": commit.id,
+        "authored_date": commit.authored_date,
+        "committed_date": commit.committed_date,
+        "message": commit.message,
+        "web_url": commit.web_url,
+        "project_id": int(commit.project_id),
+        "diff_stats_additions": commit.stats["additions"],
+        "diff_stats_deletions": commit.stats["deletions"],
+        "diff_stats_total": commit.stats["total"],
+    }
+
+    db["commits"].insert(
+        data,
+        pk="id",
+        alter=True,
+        replace=True,
+        columns={
+            "id": str,
+            "authored_date": str,
+            "committed_date": str,
+            "message": str,
+            "web_url": str,
+            "project_id": int,
+            "diff_stats_additions": int,
+            "diff_stats_deletions": int,
+            "diff_stats_total": int,
+        },
+        foreign_keys=[
+            ("project_id", "projects", "id"),
+        ],
+    )
+
+
 def fetch_deployments(
     project: str, name: str, token: str, host: str, last_updated: str | None
 ) -> list[dict]:
@@ -372,6 +417,7 @@ def save_deployment(db: Database, deployment) -> None:
             ("project_id", "projects", "id"),
             ("environment_id", "environments", "id"),
             ("job_id", "jobs", "id"),
+            ("commit_sha", "commits", "id"),
         ],
     )
 

@@ -233,6 +233,37 @@ def deployments(db_path, project, environment, auth):
     click.echo(f"Saved/updated {new} deployments")
 
 
+@cli.command(name="commits")
+@click.argument(
+    "db_path",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    required=True,
+)
+@click.argument("project", required=True)
+@click.option(
+    "-a",
+    "--auth",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=True),
+    default="auth.json",
+    help="Path to auth.json token file",
+)
+def commits(db_path, project, auth):
+    db = sqlite_utils.Database(db_path)
+    token, host = load_config(auth)
+
+    new = 0
+    for commit in utils.fetch_commits(
+        project,
+        token,
+        host,
+    ):
+        utils.save_commit(db, commit)
+        new += 1
+
+    utils.ensure_db_shape(db)
+    click.echo(f"Saved/updated {new} commits")
+
+
 def load_config(auth):
     try:
         data = json.load(open(auth))
