@@ -11,7 +11,7 @@ def get_client(host: str, token: str) -> Client:
         url=f"https://{host}/api/graphql",
         headers={"Authorization": f"Bearer {token}"},
     )
-    return Client(transport=transport, fetch_schema_from_transport=True)
+    return Client(transport=transport, fetch_schema_from_transport=True, execute_timeout=20)
 
 
 project_query = gql(
