@@ -1,5 +1,6 @@
 # gitlab-to-sqlite
 
+[![PyPI](https://img.shields.io/pypi/v/gitlab-to-sqlite.svg)](https://pypi.org/project/gitlab-to-sqlite/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/squiddy/gitlab-to-sqlite/blob/main/LICENSE)
 
 Save data from GitLab to a SQLite database.
@@ -13,7 +14,11 @@ https://github.com/dogsheep/github-to-sqlite/.
 - [Authentication](#authentication)
 - [Using custom gitlab instance](#using-custom-gitlab-instance)
 - [Fetching projects](#fetching-projects)
+- [Fetching merge requests](#fetching-merge-requests)
 - [Fetching pipelines](#fetching-pipelines)
+- [Fetching environments](#fetching-environments)
+- [Fetching deployments](#fetching-deployments)
+- [Fetching commits](#fetching-commits)
 
 ## How to install
 
@@ -47,6 +52,15 @@ The `projects` command retrieves a single project.
 
     $ gitlab-to-sqlite projects gitlab.db group/project-name
 
+## Fetching merge requests
+
+The `merge-requests` command retrieves updated or created merge requests.
+
+    $ gitlab-to-sqlite merge-requests gitlab.db group/project-name
+
+This command can be run regularly. Based on the most recent created or updated
+merge request it only fetches changes that happened afterwards.
+
 ## Fetching pipelines
 
 The `pipelines` command retrieves updated or created pipelines with their
@@ -56,3 +70,25 @@ corresponding jobs.
 
 This command can be run regularly. Based on the most recent created or updated
 pipeline it only fetches changes that happened afterwards.
+
+## Fetching environments
+
+The `environments` command retrieves all environments of a single project.
+
+    $ gitlab-to-sqlite projects gitlab.db group/project-name
+
+## Fetching deployments
+
+The `deployments` command retrieves all deployments of a specific environment in
+a single project.
+
+    $ gitlab-to-sqlite deployments gitlab.db group/project-name environment-name
+
+This command can be run regularly. Based on the most recent created or updated
+deployment it only fetches changes that happened afterwards.
+
+## Fetching commits
+
+The `commits` command retrieves all commits of a single project.
+
+    $ gitlab-to-sqlite commits gitlab.db group/project-name

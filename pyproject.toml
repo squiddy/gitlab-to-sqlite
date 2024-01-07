@@ -1,0 +1,32 @@
+[project]
+name = "gitlab_to_sqlite"
+version = "0.0.3"
+description = "Save data from GitLab to a SQLite database"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Reiner Gerecke"}]
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Development Status :: 3 - Alpha"
+]
+dependencies = [
+    "sqlite-utils>=2.7.2",
+    "gql[all]",
+    "python-gitlab"
+]
+
+[project.optional-dependencies]
+test = ["pytest", "black"]
+
+[project.urls]
+Homepage = "https://github.com/squiddy/gitlab-to-sqlite"
+Issues = "https://github.com/squiddy/gitlab-to-sqlite/issues"
+
+[project.scripts]
+gitlab-to-sqlite = "gitlab_to_sqlite.cli:cli"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
