@@ -130,6 +130,8 @@ def fetch_pipelines(
 def save_pipeline(db: Database, pipeline: dict, host: str) -> None:
     if "projects" not in db.table_names():
         db["projects"].create({"id": int}, pk="id")
+    if "commits" not in db.table_names():
+        db["commits"].create({"id": int}, pk="id")
 
     data = {
         "id": pipeline["id"].split("/")[-1],
